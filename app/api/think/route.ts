@@ -1,6 +1,9 @@
 import Groq from "groq-sdk";
 import { Redis } from "@upstash/redis";
 
+// Force Node.js runtime (not Edge) for full API compatibility
+export const runtime = "nodejs";
+
 // Initialize Redis only if credentials exist
 const redis = process.env.UPSTASH_REDIS_REST_URL
   ? new Redis({

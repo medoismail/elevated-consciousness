@@ -1,9 +1,8 @@
 import Groq from "groq-sdk";
 import { Redis } from "@upstash/redis";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Force Node.js runtime (not Edge) for full API compatibility
+export const runtime = "nodejs";
 
 const redis = process.env.UPSTASH_REDIS_REST_URL
   ? new Redis({
@@ -15,6 +14,10 @@ const redis = process.env.UPSTASH_REDIS_REST_URL
 export async function POST(request: Request) {
   try {
     const { text, targetLang, thoughtId } = await request.json();
+
+    const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
 
     if (!text || !targetLang) {
       return Response.json({ error: "Missing text or targetLang" }, { status: 400 });
