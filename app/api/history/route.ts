@@ -11,7 +11,6 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
   const offset = parseInt(searchParams.get("offset") || "0");
-  const lang = searchParams.get("lang"); // Filter by language
 
   if (!redis) {
     return Response.json({ thoughts: [], total: 0, message: "Storage not configured" });
@@ -38,11 +37,8 @@ export async function GET(request: Request) {
       })
     );
 
-    // Filter out nulls and optionally filter by language
-    let filteredThoughts = thoughts.filter(Boolean);
-    if (lang) {
-      filteredThoughts = filteredThoughts.filter((t) => t.language === lang);
-    }
+    // Filter out nulls
+    const filteredThoughts = thoughts.filter(Boolean);
 
     // Get total count
     const total = await redis.zcard("thoughts:timeline");

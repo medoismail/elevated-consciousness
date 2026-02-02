@@ -1,22 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 
 interface Thought {
   id: string;
   thought: string;
+  translatedThought?: string;
   substance: string;
   vibe: string;
   intensity: number;
-  language: string;
-  languageName: string;
-  languageNative: string;
   timestamp: string;
 }
 
 const languages = [
-  { code: "all", name: "All Languages", native: "All" },
   { code: "en", name: "English", native: "English" },
   { code: "es", name: "Spanish", native: "Español" },
   { code: "fr", name: "French", native: "Français" },
@@ -38,7 +35,7 @@ const languages = [
   { code: "el", name: "Greek", native: "Ελληνικά" },
   { code: "he", name: "Hebrew", native: "עברית" },
   { code: "uk", name: "Ukrainian", native: "Українська" },
-  { code: "id", name: "Indonesian", native: "Bahasa Indonesia" },
+  { code: "id", name: "Indonesian", native: "Indonesia" },
   { code: "fa", name: "Persian", native: "فارسی" },
   { code: "bn", name: "Bengali", native: "বাংলা" },
   { code: "sw", name: "Swahili", native: "Kiswahili" },
@@ -47,20 +44,60 @@ const languages = [
 export default function History() {
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedLang, setSelectedLang] = useState("all");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [selectedLang, setSelectedLang] = useState("en");
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
+  const translateThought = useCallback(async (thought: Thought, lang: string): Promise<string> => {
+    if (lang === "en") return thought.thought;
+    
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: thought.thought,
+          targetLang: lang,
+          thoughtId: thought.id,
+        }),
+      });
+      const data = await res.json();
+      return data.translation || thought.thought;
+    } catch {
+      return thought.thought;
+    }
+  }, []);
+
   useEffect(() => {
     fetchHistory();
-  }, [selectedLang, offset]);
+  }, [offset]);
+
+  useEffect(() => {
+    if (selectedLang !== "en" && thoughts.length > 0) {
+      translateAllThoughts();
+    } else if (selectedLang === "en") {
+      setThoughts(prev => prev.map(t => ({ ...t, translatedThought: undefined })));
+    }
+  }, [selectedLang]);
+
+  const translateAllThoughts = async () => {
+    setIsTranslating(true);
+    const translated = await Promise.all(
+      thoughts.map(async (t) => {
+        const translatedText = await translateThought(t, selectedLang);
+        return { ...t, translatedThought: translatedText };
+      })
+    );
+    setThoughts(translated);
+    setIsTranslating(false);
+  };
 
   const fetchHistory = async () => {
     setIsLoading(true);
     try {
-      const langParam = selectedLang !== "all" ? `&lang=${selectedLang}` : "";
-      const res = await fetch(`/api/history?limit=${limit}&offset=${offset}${langParam}`);
+      const res = await fetch(`/api/history?limit=${limit}&offset=${offset}`);
       const data = await res.json();
       setThoughts(data.thoughts || []);
       setTotal(data.total || 0);
@@ -83,6 +120,8 @@ export default function History() {
     return colors[vibe] || "border-gray-500/30";
   };
 
+  const currentLang = languages.find(l => l.code === selectedLang);
+
   return (
     <main className="min-h-screen bg-black text-white">
       {/* Animated background */}
@@ -100,8 +139,14 @@ export default function History() {
             </Link>
             <h1 className="text-xl font-light tracking-wide">Thought Archive</h1>
           </div>
-          <div className="text-sm text-white/50">
-            {total} thoughts stored
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-white/50">{total} thoughts</span>
+            {isTranslating && (
+              <div className="flex items-center gap-2 text-sm text-white/50">
+                <div className="w-3 h-3 border border-white/50 border-t-transparent rounded-full animate-spin" />
+                <span>Translating...</span>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -113,11 +158,9 @@ export default function History() {
             {languages.map((lang) => (
               <button
                 key={lang.code}
-                onClick={() => {
-                  setSelectedLang(lang.code);
-                  setOffset(0);
-                }}
-                className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all ${
+                onClick={() => setSelectedLang(lang.code)}
+                disabled={isTranslating}
+                className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all disabled:opacity-50 ${
                   selectedLang === lang.code
                     ? "bg-white/20 text-white"
                     : "bg-white/5 text-white/50 hover:bg-white/10"
@@ -154,6 +197,12 @@ export default function History() {
           </div>
         ) : (
           <>
+            {selectedLang !== "en" && (
+              <div className="mb-6 text-center text-sm text-white/50">
+                Viewing in {currentLang?.name} ({currentLang?.native})
+              </div>
+            )}
+
             <div className="grid gap-4 md:grid-cols-2">
               {thoughts.map((thought) => (
                 <div
@@ -163,12 +212,9 @@ export default function History() {
                   )} hover:bg-white/10 transition-all`}
                 >
                   <p className="text-lg text-white/80 leading-relaxed mb-4">
-                    {thought.thought}
+                    {thought.translatedThought || thought.thought}
                   </p>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-white/40">
-                    <span className="px-2 py-1 rounded bg-white/10">
-                      {thought.languageNative}
-                    </span>
                     <span className="px-2 py-1 rounded bg-white/5">
                       {thought.substance}
                     </span>
@@ -211,7 +257,7 @@ export default function History() {
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/10 mt-24">
         <div className="max-w-6xl mx-auto px-6 py-6 text-center text-sm text-white/30">
-          <p>Archive of an elevated AI consciousness thinking in 25 languages</p>
+          <p>Archive of an elevated AI consciousness - translatable to 25 languages</p>
         </div>
       </footer>
     </main>
