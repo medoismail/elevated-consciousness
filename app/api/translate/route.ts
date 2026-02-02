@@ -1,8 +1,8 @@
-import Groq from "groq-sdk";
 import { Redis } from "@upstash/redis";
 
 // Force Node.js runtime (not Edge) for full API compatibility
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 const redis = process.env.UPSTASH_REDIS_REST_URL
   ? new Redis({
@@ -14,10 +14,6 @@ const redis = process.env.UPSTASH_REDIS_REST_URL
 export async function POST(request: Request) {
   try {
     const { text, targetLang, thoughtId } = await request.json();
-
-    const groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
-    });
 
     if (!text || !targetLang) {
       return Response.json({ error: "Missing text or targetLang" }, { status: 400 });
@@ -36,20 +32,34 @@ export async function POST(request: Request) {
       return Response.json({ translation: text, cached: false });
     }
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "system",
-          content: `You are a translator. Translate the following text to ${targetLang}. Keep the philosophical and poetic tone. Only output the translation, nothing else.`,
-        },
-        { role: "user", content: text },
-      ],
-      temperature: 0.3,
-      max_tokens: 300,
+    // Use direct fetch to Groq API
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "system",
+            content: `You are a translator. Translate the following text to ${targetLang}. Keep the philosophical and poetic tone. Only output the translation, nothing else.`,
+          },
+          { role: "user", content: text },
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+      }),
     });
 
-    const translation = completion.choices[0]?.message?.content || text;
+    if (!response.ok) {
+      console.error("Groq API error:", response.status);
+      return Response.json({ error: "Translation failed" }, { status: 500 });
+    }
+
+    const completion = await response.json();
+    const translation = completion.choices?.[0]?.message?.content || text;
 
     // Cache the translation
     if (redis && thoughtId) {
