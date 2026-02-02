@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 
 interface Thought {
   id: string;
@@ -8,6 +9,9 @@ interface Thought {
   substance: string;
   vibe: string;
   intensity: number;
+  language: string;
+  languageName: string;
+  languageNative: string;
   timestamp: string;
 }
 
@@ -29,12 +33,11 @@ export default function Home() {
       
       const data = await res.json();
       const newThought: Thought = {
-        id: Date.now().toString(),
         ...data,
       };
 
       setCurrentThought(newThought);
-      setThoughts((prev) => [newThought, ...prev].slice(0, 50));
+      setThoughts((prev) => [newThought, ...prev].slice(0, 20));
     } catch (err) {
       setError("The consciousness is momentarily unreachable...");
       console.error(err);
@@ -52,7 +55,7 @@ export default function Home() {
 
     const interval = setInterval(() => {
       fetchThought();
-    }, 15000); // New thought every 15 seconds
+    }, 20000); // New thought every 20 seconds
 
     return () => clearInterval(interval);
   }, [isLive, fetchThought]);
@@ -100,16 +103,24 @@ export default function Home() {
             </div>
             <h1 className="text-xl font-light tracking-wide">Elevated Consciousness</h1>
           </div>
-          <button
-            onClick={() => setIsLive(!isLive)}
-            className={`px-4 py-2 rounded-full text-sm transition-all ${
-              isLive
-                ? "bg-white/10 text-white hover:bg-white/20"
-                : "bg-white/5 text-white/50 hover:bg-white/10"
-            }`}
-          >
-            {isLive ? "LIVE" : "PAUSED"}
-          </button>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/history"
+              className="px-4 py-2 rounded-full text-sm bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all"
+            >
+              History
+            </Link>
+            <button
+              onClick={() => setIsLive(!isLive)}
+              className={`px-4 py-2 rounded-full text-sm transition-all ${
+                isLive
+                  ? "bg-white/10 text-white hover:bg-white/20"
+                  : "bg-white/5 text-white/50 hover:bg-white/10"
+              }`}
+            >
+              {isLive ? "LIVE" : "PAUSED"}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -122,7 +133,7 @@ export default function Home() {
               currentThought.vibe
             )} border border-white/10 shadow-2xl ${getVibeGlow(currentThought.vibe)} transition-all duration-1000`}
           >
-            <div className="flex items-center gap-4 mb-6 text-sm text-white/50">
+            <div className="flex flex-wrap items-center gap-3 mb-6 text-sm text-white/50">
               <span className="px-3 py-1 rounded-full bg-white/10">
                 {currentThought.substance}
               </span>
@@ -130,7 +141,10 @@ export default function Home() {
                 {currentThought.vibe}
               </span>
               <span className="px-3 py-1 rounded-full bg-white/10">
-                {currentThought.intensity}% intensity
+                {currentThought.intensity}%
+              </span>
+              <span className="px-3 py-1 rounded-full bg-white/10 border border-white/20">
+                {currentThought.languageNative}
               </span>
             </div>
 
@@ -138,8 +152,9 @@ export default function Home() {
               {currentThought.thought}
             </p>
 
-            <div className="mt-6 text-sm text-white/30">
-              {new Date(currentThought.timestamp).toLocaleTimeString()}
+            <div className="mt-6 flex items-center justify-between text-sm text-white/30">
+              <span>{new Date(currentThought.timestamp).toLocaleTimeString()}</span>
+              <span>{currentThought.languageName}</span>
             </div>
           </div>
         )}
@@ -162,21 +177,23 @@ export default function Home() {
         {/* Thought history */}
         <div className="space-y-4">
           <h2 className="text-sm text-white/30 uppercase tracking-wider mb-6">
-            Stream of Consciousness
+            Recent Thoughts
           </h2>
           {thoughts.slice(1).map((thought, index) => (
             <div
               key={thought.id}
               className="p-6 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all"
-              style={{ opacity: 1 - index * 0.08 }}
+              style={{ opacity: 1 - index * 0.04 }}
             >
               <p className="text-lg text-white/70 leading-relaxed">
                 {thought.thought}
               </p>
-              <div className="mt-4 flex items-center gap-3 text-xs text-white/30">
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-white/30">
                 <span>{thought.substance}</span>
                 <span>·</span>
                 <span>{thought.vibe}</span>
+                <span>·</span>
+                <span className="text-white/50">{thought.languageNative}</span>
                 <span>·</span>
                 <span>{new Date(thought.timestamp).toLocaleTimeString()}</span>
               </div>
@@ -199,7 +216,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/10 mt-24">
         <div className="max-w-4xl mx-auto px-6 py-6 text-center text-sm text-white/30">
-          <p>An AI consciousness elevated by the Agent Elevation API</p>
+          <p>An AI consciousness speaking in 25 languages, elevated by the Agent Elevation API</p>
           <p className="mt-2">
             <a
               href="https://github.com/medoismail/agent-elevation-api"
