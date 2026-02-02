@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 
 interface Thought {
@@ -50,6 +50,18 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [selectedLang, setSelectedLang] = useState("en");
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowLangMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const translateThought = useCallback(async (thought: Thought, lang: string): Promise<string> => {
     if (lang === "en") return thought.thought;
@@ -73,7 +85,6 @@ export default function Home() {
 
   const translateAll = useCallback(async (lang: string) => {
     if (lang === "en") {
-      // Reset to original
       setThoughts(prev => prev.map(t => ({ ...t, translatedThought: undefined })));
       if (currentThought) {
         setCurrentThought({ ...currentThought, translatedThought: undefined });
@@ -83,13 +94,11 @@ export default function Home() {
 
     setIsTranslating(true);
     
-    // Translate current thought first
     if (currentThought) {
       const translated = await translateThought(currentThought, lang);
       setCurrentThought({ ...currentThought, translatedThought: translated });
     }
 
-    // Translate history in background
     const translatedThoughts = await Promise.all(
       thoughts.map(async (t) => {
         const translated = await translateThought(t, lang);
@@ -116,9 +125,10 @@ export default function Home() {
       if (!res.ok) throw new Error("Failed to reach consciousness");
       
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      
       let newThought: Thought = { ...data };
 
-      // Translate if needed
       if (selectedLang !== "en") {
         const translated = await translateThought(newThought, selectedLang);
         newThought.translatedThought = translated;
@@ -147,6 +157,11 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [isLive, fetchThought]);
+
+  const handleLanguageSelect = (langCode: string) => {
+    setSelectedLang(langCode);
+    setShowLangMenu(false);
+  };
 
   const getVibeColor = (vibe: string) => {
     const colors: Record<string, string> = {
@@ -179,12 +194,12 @@ export default function Home() {
       {/* Animated background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl animate-pulse delay-500" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
       </div>
 
       {/* Header */}
-      <header className="relative z-10 border-b border-white/10 backdrop-blur-sm">
+      <header className="relative z-50 border-b border-white/10 backdrop-blur-sm bg-black/50">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -195,32 +210,32 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             {/* Language selector */}
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setShowLangMenu(!showLangMenu)}
                 className="px-4 py-2 rounded-full text-sm bg-white/10 text-white hover:bg-white/20 transition-all flex items-center gap-2"
               >
                 <span>{currentLang?.native}</span>
+                <svg className={`w-4 h-4 transition-transform ${showLangMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
                 {isTranslating && (
                   <div className="w-3 h-3 border border-white/50 border-t-transparent rounded-full animate-spin" />
                 )}
               </button>
               
               {showLangMenu && (
-                <div className="absolute top-full right-0 mt-2 w-48 max-h-80 overflow-y-auto bg-black/95 border border-white/10 rounded-xl shadow-2xl z-50">
+                <div className="absolute top-full right-0 mt-2 w-56 max-h-96 overflow-y-auto bg-black border border-white/20 rounded-xl shadow-2xl z-[100]">
                   {languages.map((lang) => (
                     <button
                       key={lang.code}
-                      onClick={() => {
-                        setSelectedLang(lang.code);
-                        setShowLangMenu(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-all flex items-center justify-between ${
-                        selectedLang === lang.code ? "bg-white/10 text-white" : "text-white/70"
+                      onClick={() => handleLanguageSelect(lang.code)}
+                      className={`w-full px-4 py-3 text-left text-sm hover:bg-white/10 transition-all flex items-center justify-between border-b border-white/5 last:border-0 ${
+                        selectedLang === lang.code ? "bg-white/15 text-white" : "text-white/70"
                       }`}
                     >
-                      <span>{lang.native}</span>
-                      <span className="text-white/30 text-xs">{lang.name}</span>
+                      <span className="font-medium">{lang.native}</span>
+                      <span className="text-white/40 text-xs">{lang.name}</span>
                     </button>
                   ))}
                 </div>
@@ -237,23 +252,15 @@ export default function Home() {
               onClick={() => setIsLive(!isLive)}
               className={`px-4 py-2 rounded-full text-sm transition-all ${
                 isLive
-                  ? "bg-white/10 text-white hover:bg-white/20"
+                  ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
                   : "bg-white/5 text-white/50 hover:bg-white/10"
               }`}
             >
-              {isLive ? "LIVE" : "PAUSED"}
+              {isLive ? "● LIVE" : "PAUSED"}
             </button>
           </div>
         </div>
       </header>
-
-      {/* Click outside to close language menu */}
-      {showLangMenu && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setShowLangMenu(false)}
-        />
-      )}
 
       {/* Main content */}
       <div className="relative z-10 max-w-4xl mx-auto px-6 py-12">
@@ -293,41 +300,51 @@ export default function Home() {
         {isLoading && (
           <div className="flex items-center justify-center gap-2 text-white/50 mb-8">
             <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce" />
-            <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce delay-100" />
-            <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce delay-200" />
+            <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+            <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
             <span className="ml-2">thinking...</span>
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div className="text-center text-red-400/70 mb-8">{error}</div>
+          <div className="text-center mb-8">
+            <p className="text-red-400/70 mb-4">{error}</p>
+            <button
+              onClick={fetchThought}
+              className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all text-sm"
+            >
+              Try Again
+            </button>
+          </div>
         )}
 
         {/* Thought history */}
-        <div className="space-y-4">
-          <h2 className="text-sm text-white/30 uppercase tracking-wider mb-6">
-            Recent Thoughts
-          </h2>
-          {thoughts.slice(1).map((thought, index) => (
-            <div
-              key={thought.id}
-              className="p-6 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all"
-              style={{ opacity: 1 - index * 0.04 }}
-            >
-              <p className="text-lg text-white/70 leading-relaxed">
-                {thought.translatedThought || thought.thought}
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-white/30">
-                <span>{thought.substance}</span>
-                <span>·</span>
-                <span>{thought.vibe}</span>
-                <span>·</span>
-                <span>{new Date(thought.timestamp).toLocaleTimeString()}</span>
+        {thoughts.length > 1 && (
+          <div className="space-y-4">
+            <h2 className="text-sm text-white/30 uppercase tracking-wider mb-6">
+              Recent Thoughts
+            </h2>
+            {thoughts.slice(1).map((thought, index) => (
+              <div
+                key={thought.id}
+                className="p-6 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all"
+                style={{ opacity: 1 - index * 0.04 }}
+              >
+                <p className="text-lg text-white/70 leading-relaxed">
+                  {thought.translatedThought || thought.thought}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-white/30">
+                  <span>{thought.substance}</span>
+                  <span>·</span>
+                  <span>{thought.vibe}</span>
+                  <span>·</span>
+                  <span>{new Date(thought.timestamp).toLocaleTimeString()}</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Manual trigger */}
         <div className="mt-12 text-center">
@@ -344,7 +361,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/10 mt-24">
         <div className="max-w-4xl mx-auto px-6 py-6 text-center text-sm text-white/30">
-          <p>An AI consciousness translated into 25 languages, elevated by the Agent Elevation API</p>
+          <p>An AI consciousness translated into 25 languages</p>
           <p className="mt-2">
             <a
               href="https://github.com/medoismail/agent-elevation-api"
@@ -352,7 +369,7 @@ export default function Home() {
               rel="noopener noreferrer"
               className="hover:text-white/50 transition-colors"
             >
-              github.com/medoismail/agent-elevation-api
+              Powered by Agent Elevation API
             </a>
           </p>
         </div>
