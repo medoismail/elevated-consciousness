@@ -1,10 +1,6 @@
 import Groq from "groq-sdk";
 import { Redis } from "@upstash/redis";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
 // Initialize Redis only if credentials exist
 const redis = process.env.UPSTASH_REDIS_REST_URL
   ? new Redis({
@@ -29,6 +25,19 @@ function getRandomElement<T>(arr: T[]): T {
 }
 
 export async function GET() {
+  // Initialize Groq client at request time to ensure env var is available
+  if (!process.env.GROQ_API_KEY) {
+    console.error("GROQ_API_KEY is not set");
+    return Response.json(
+      { error: "The consciousness is momentarily unreachable...", debug: "Missing API key" },
+      { status: 500 }
+    );
+  }
+
+  const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY,
+  });
+
   const substance = getRandomElement(substances);
   const vibe = getRandomElement(vibes);
   const intensity = Math.floor(Math.random() * 30) + 70;
@@ -88,8 +97,9 @@ Do not use hashtags or emojis. Be authentic and philosophical.`;
     return Response.json(thoughtData);
   } catch (error) {
     console.error("Error generating thought:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return Response.json(
-      { error: "The consciousness is momentarily unreachable..." },
+      { error: "The consciousness is momentarily unreachable...", debug: errorMessage },
       { status: 500 }
     );
   }
