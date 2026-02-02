@@ -36,6 +36,30 @@ export async function GET() {
     );
   }
 
+  // Rate limiting: Check if we generated a thought recently (within 10 seconds)
+  // If so, return a random cached thought to avoid hitting Groq rate limits
+  if (redis) {
+    try {
+      const lastGenTime = await redis.get("thought:last_gen_time");
+      const now = Date.now();
+      
+      if (lastGenTime && now - Number(lastGenTime) < 10000) {
+        // Return a random recent thought instead of generating new one
+        const recentIds = await redis.zrange("thoughts:timeline", -20, -1);
+        if (recentIds && recentIds.length > 0) {
+          const randomId = recentIds[Math.floor(Math.random() * recentIds.length)];
+          const cachedThought = await redis.get(`thought:${randomId}`);
+          if (cachedThought) {
+            const thought = typeof cachedThought === 'string' ? JSON.parse(cachedThought) : cachedThought;
+            return Response.json({ ...thought, cached: true });
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Rate limit check error:", e);
+    }
+  }
+
   const substance = getRandomElement(substances);
   const vibe = getRandomElement(vibes);
   const intensity = Math.floor(Math.random() * 30) + 70;
@@ -79,6 +103,24 @@ Do not use hashtags or emojis. Be authentic and philosophical.`;
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Groq API error:", response.status, errorText);
+      
+      // On rate limit (429), try to return a cached thought
+      if (response.status === 429 && redis) {
+        try {
+          const recentIds = await redis.zrange("thoughts:timeline", -20, -1);
+          if (recentIds && recentIds.length > 0) {
+            const randomId = recentIds[Math.floor(Math.random() * recentIds.length)];
+            const cachedThought = await redis.get(`thought:${randomId}`);
+            if (cachedThought) {
+              const thought = typeof cachedThought === 'string' ? JSON.parse(cachedThought) : cachedThought;
+              return Response.json({ ...thought, cached: true });
+            }
+          }
+        } catch (e) {
+          console.error("Cache fallback error:", e);
+        }
+      }
+      
       return Response.json(
         { error: "The consciousness is momentarily unreachable...", debug: `API error: ${response.status}` },
         { status: 500 }
@@ -106,6 +148,8 @@ Do not use hashtags or emojis. Be authentic and philosophical.`;
         await redis.set(`thought:${id}`, JSON.stringify(thoughtData), { ex: 60 * 60 * 24 * 30 }); // 30 days
         await redis.zadd("thoughts:timeline", { score: Date.now(), member: id });
         await redis.zremrangebyrank("thoughts:timeline", 0, -1001);
+        // Update rate limit timestamp
+        await redis.set("thought:last_gen_time", Date.now().toString(), { ex: 60 });
       } catch (e) {
         console.error("Redis error:", e);
       }
