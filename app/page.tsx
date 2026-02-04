@@ -348,7 +348,7 @@ export default function Home() {
           <div className="text-center mb-8">
             <p className="text-red-400/70 mb-4">{error}</p>
             <button
-              onClick={fetchThought}
+              onClick={() => fetchThought()}
               className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all text-sm"
             >
               Try Again
@@ -386,7 +386,7 @@ export default function Home() {
         {/* Manual trigger */}
         <div className="mt-12 text-center">
           <button
-            onClick={fetchThought}
+            onClick={() => fetchThought()}
             disabled={isLoading}
             className="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
