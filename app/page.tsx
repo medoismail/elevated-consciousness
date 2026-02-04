@@ -153,7 +153,7 @@ export default function Home() {
 
     const interval = setInterval(() => {
       fetchThought();
-    }, 45000); // 45 seconds - optimized for free tier
+    }, 60000); // 60 seconds - smarter model needs more time
 
     return () => clearInterval(interval);
   }, [isLive, fetchThought]);
