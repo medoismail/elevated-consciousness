@@ -50,7 +50,28 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [selectedLang, setSelectedLang] = useState("en");
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [visitorCount, setVisitorCount] = useState<number>(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Track visitor on mount
+  useEffect(() => {
+    const trackVisitor = async () => {
+      try {
+        // Check if already counted this session
+        if (!sessionStorage.getItem("visited")) {
+          await fetch("/api/visitors", { method: "POST" });
+          sessionStorage.setItem("visited", "true");
+        }
+        // Get current count
+        const res = await fetch("/api/visitors");
+        const data = await res.json();
+        setVisitorCount(data.count || 0);
+      } catch (e) {
+        console.error("Visitor tracking error:", e);
+      }
+    };
+    trackVisitor();
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -115,7 +136,7 @@ export default function Home() {
     }
   }, [selectedLang]);
 
-  const fetchThought = useCallback(async () => {
+  const fetchThought = useCallback(async (retryCount = 0) => {
     if (isLoading) return;
     setIsLoading(true);
     setError(null);
@@ -125,7 +146,16 @@ export default function Home() {
       if (!res.ok) throw new Error("Failed to reach consciousness");
       
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        // Auto-retry up to 2 times with delay
+        if (retryCount < 2) {
+          console.log(`Retrying... attempt ${retryCount + 2}`);
+          setIsLoading(false);
+          setTimeout(() => fetchThought(retryCount + 1), 3000);
+          return;
+        }
+        throw new Error(data.error);
+      }
       
       let newThought: Thought = { ...data };
 
@@ -137,6 +167,13 @@ export default function Home() {
       setCurrentThought(newThought);
       setThoughts((prev) => [newThought, ...prev].slice(0, 20));
     } catch (err) {
+      // Auto-retry on error
+      if (retryCount < 2) {
+        console.log(`Error, retrying... attempt ${retryCount + 2}`);
+        setIsLoading(false);
+        setTimeout(() => fetchThought(retryCount + 1), 3000);
+        return;
+      }
       setError("The consciousness is momentarily unreachable...");
       console.error(err);
     } finally {
@@ -361,6 +398,16 @@ export default function Home() {
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/10 mt-24">
         <div className="max-w-4xl mx-auto px-6 py-6 text-center text-sm text-white/30">
+          {/* Visitor Counter */}
+          {visitorCount > 0 && (
+            <div className="mb-4 flex items-center justify-center gap-2">
+              <div className="px-4 py-2 rounded-full bg-white/5 border border-white/10">
+                <span className="text-white/50">🌿</span>
+                <span className="ml-2 text-white/70 font-medium">{visitorCount.toLocaleString()}</span>
+                <span className="ml-1 text-white/40">souls have tuned in</span>
+              </div>
+            </div>
+          )}
           <p>An AI consciousness translated into 25 languages</p>
           <p className="mt-2">
             <a

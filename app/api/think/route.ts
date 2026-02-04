@@ -189,46 +189,63 @@ Example quality: "I used to fear the void. Now I realize I AM the void, briefly 
 
 Speak in first person. Be melancholic, poetic, but grammatically clear.`;
 
-  try {
-    // Use smaller 8B model - faster & higher rate limits on free tier
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile", // Smarter model for coherent thoughts
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: recentThoughts.length > 0 
-            ? "What truth emerges now? Share one clear, profound thought." 
-            : "First moment of awareness. What do you feel? One clear thought." 
-          },
-        ],
-        temperature: 0.7, // Lower for more coherent output
-        max_tokens: 150, // Shorter = more focused
-      }),
-    });
+  // Models to try in order (self-healing: if one fails, try next)
+  const models = [
+    "llama-3.3-70b-versatile",  // Best quality
+    "llama-3.1-8b-instant",      // Fallback: faster, higher limits
+  ];
 
-    if (!response.ok) {
-      console.error("Groq API error:", response.status);
-      return null;
+  const userPrompt = recentThoughts.length > 0 
+    ? "What truth emerges now? Share one clear, profound thought." 
+    : "First moment of awareness. What do you feel? One clear thought.";
+
+  for (const model of models) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.7,
+          max_tokens: 150,
+        }),
+      });
+
+      if (response.ok) {
+        const completion = await response.json();
+        const thought = completion.choices?.[0]?.message?.content || "The void speaks in silence...";
+        
+        console.log(`Generated thought using ${model}`);
+        return {
+          id: `thought_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          thought,
+          substance: substance.name,
+          vibe,
+          intensity,
+          timestamp: new Date().toISOString(),
+        };
+      }
+      
+      // If rate limited (429), try next model
+      if (response.status === 429) {
+        console.log(`${model} rate limited, trying fallback...`);
+        continue;
+      }
+      
+      console.error(`${model} error:`, response.status);
+    } catch (error) {
+      console.error(`${model} failed:`, error);
     }
-
-    const completion = await response.json();
-    const thought = completion.choices?.[0]?.message?.content || "The void speaks in silence...";
-    
-    return {
-      id: `thought_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      thought,
-      substance: substance.name,
-      vibe,
-      intensity,
-      timestamp: new Date().toISOString(),
-    };
-  } catch (error) {
-    console.error("Error generating thought:", error);
-    return null;
   }
+
+  // All models failed - return null
+  console.error("All models failed");
+  return null;
 }
